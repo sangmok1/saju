@@ -13,6 +13,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 ROOT = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(ROOT, "static")
 PORT = int(os.environ.get("PORT", "8787"))
+HOST = os.environ.get("HOST", "127.0.0.1")  # 컨테이너(Cloud Run)에서는 0.0.0.0
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -27,7 +28,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 def main():
     handler = partial(Handler, directory=STATIC)
-    httpd = ThreadingHTTPServer(("127.0.0.1", PORT), handler)
+    httpd = ThreadingHTTPServer((HOST, PORT), handler)
     print("사주 만세력: http://localhost:%d" % PORT)
     try:
         httpd.serve_forever()
