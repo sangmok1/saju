@@ -85,7 +85,23 @@
     <section class="card"><h2>대운 <small>10년 단위의 큰 흐름</small></h2><div id="daeun"></div></section>
     <section class="card"><h2>세운 <small>해마다의 흐름</small></h2><div id="seun"></div></section>
     <section class="card" id="aiCard">
-      <h2>AI 심층 해석 <small>선택</small></h2>
+      <h2>AI 심층 해석 <small>선택 · Gemini</small></h2>
+      <div id="keyBox" class="keybox">
+        <div id="keyEdit">
+          <p class="small muted">Gemini API 키를 넣으면 AI 해석을 쓸 수 있습니다. 키는 <b>이 브라우저에만</b> 저장되고, 해석을 요청할 때 Google로만 전송됩니다.
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">키 발급받기 ↗</a></p>
+          <div class="row">
+            <input id="keyInput" class="grow" type="password" autocomplete="off" spellcheck="false" placeholder="Gemini API 키 붙여넣기 (AIza…)">
+            <button id="keySave" class="primary sm" type="button">저장</button>
+          </div>
+        </div>
+        <div id="keyView" class="row keyview" hidden>
+          <span class="small">🔑 키 저장됨 <code id="keyMask"></code></span>
+          <span class="grow"></span>
+          <button id="keyChange" class="link" type="button">변경</button>
+          <button id="keyDelete" class="link" type="button">삭제</button>
+        </div>
+      </div>
       <div class="row">
         <input id="aiQ" class="grow" type="text" placeholder="궁금한 점(선택) — 예: 올해 이직해도 될까? 나와 맞는 직업은?">
         <button id="aiBtn" class="primary sm" type="button">AI 해석 받기</button>

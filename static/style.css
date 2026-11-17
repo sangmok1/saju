@@ -126,3 +126,13 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 .ai-out .warn { padding: 12px; border-radius: 8px; background: var(--bg); color: var(--muted); font-size: 14px; }
 .ai-out code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
 #aiCard .row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Gemini 키 입력 */
+.keybox { margin-bottom: 14px; padding: 12px 14px; border: 1px dashed var(--line); border-radius: 10px; }
+.keybox p { margin: 0 0 10px; }
+.keybox a { color: var(--accent); }
+.keyview { align-items: center; }
+.keyview code { background: var(--bg); padding: 1px 6px; border-radius: 4px; }
+#aiCard > .row, .keybox .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.link { background: none; border: 0; color: var(--accent); font: inherit; font-size: 14px; padding: 4px 6px; cursor: pointer; }
+input[type=password] { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; width: 100%; min-width: 0; }

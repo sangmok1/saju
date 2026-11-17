@@ -356,26 +356,106 @@
     return out + (inList ? '</ul>' : '');
   }
 
+  // ---------- AI 해석 (Gemini, 브라우저에서 직접 호출) ----------
+  const GEMINI_MODEL = 'gemini-2.5-flash';
+  const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse`;
+  const SYSTEM_PROMPT = `당신은 한국 명리학(사주팔자)에 정통한 상담가입니다.
+사용자의 원국·대운·세운은 이미 만세력 프로그램이 정확히 계산해 두었습니다. 기둥(간지)을 다시 계산하거나 바꾸지 말고, 주어진 데이터를 근거로 해석하세요.
+프로그램이 제시한 용신은 규칙 기반 추정치이므로, 원국 전체(조후, 격국, 합충, 통근 여부)를 보고 동의하거나 다르게 판단되면 이유와 함께 말해 주세요.
+
+다음 순서로 한국어 마크다운으로 답하세요(각 소제목은 '## '로 시작):
+## 한 줄 요약
+## 타고난 성향과 기질
+## 사주의 구조와 용신 판단
+## 재물·직업 방향
+## 관계·배우자·가족
+## 대운 흐름 (지금 대운과 앞으로의 큰 전환점)
+## 올해와 내년
+## 실천 조언 (3~5개, 구체적으로)
+사용자가 질문을 남겼다면 마지막에 '## 질문에 대한 답'을 추가하세요.
+
+원칙: 근거가 되는 글자(예: 월지 午의 정관)를 짚으며 설명하고, 운명론적 단정·공포 조장·의료/법률/투자에 대한 확정적 지시는 피하며, 균형 있고 실용적으로 씁니다. 전체 분량은 1500~2500자 정도로 간결하게.`;
+
+  const KEY_STORE = 'geminiKey';
+  const getKey = () => { try { return localStorage.getItem(KEY_STORE) || ''; } catch (e) { return ''; } };
+  function renderKey() {
+    const k = getKey();
+    $('#keyEdit').hidden = !!k;
+    $('#keyView').hidden = !k;
+    $('#keyMask').textContent = k ? '••••' + k.slice(-4) : '';
+    $('#aiBtn').disabled = !k;
+    $('#aiBtn').title = k ? '' : '먼저 Gemini API 키를 저장해 주세요';
+  }
+  $('#keySave').onclick = () => {
+    const k = $('#keyInput').value.trim();
+    if (!k) { $('#keyInput').focus(); return; }
+    try { localStorage.setItem(KEY_STORE, k); } catch (e) {
+      $('#aiOut').innerHTML = '<div class="warn">이 브라우저에서는 키를 저장할 수 없습니다 (사생활 보호 모드 등).</div>'; return;
+    }
+    $('#keyInput').value = ''; renderKey();
+  };
+  $('#keyInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#keySave').click(); });
+  $('#keyChange').onclick = () => { $('#keyEdit').hidden = false; $('#keyView').hidden = true; $('#keyInput').focus(); };
+  $('#keyDelete').onclick = () => {
+    if (!confirm('저장된 Gemini API 키를 이 브라우저에서 지울까요?')) return;
+    try { localStorage.removeItem(KEY_STORE); } catch (e) { }
+    renderKey();
+  };
+  renderKey();
+
+  function geminiError(status, body) {
+    let msg = '';
+    try { msg = JSON.parse(body).error.message || ''; } catch (e) { msg = body.slice(0, 200); }
+    if (status === 400 && /API key/i.test(msg)) return 'API 키가 올바르지 않습니다. 키를 확인한 뒤 [변경]으로 다시 넣어 주세요.';
+    if (status === 403) return 'API 키에 Gemini API 사용 권한이 없습니다. AI Studio에서 발급한 키인지 확인해 주세요.';
+    if (status === 429) return '요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.';
+    if (status >= 500) return `Gemini 서버 오류입니다 (${status}). 잠시 후 다시 시도해 주세요.`;
+    return `AI 호출 실패 (${status}): ${msg}`;
+  }
+
   $('#aiBtn').onclick = async () => {
     if (!current) return;
+    const key = getKey();
+    if (!key) { renderKey(); $('#keyInput').focus(); return; }
     const btn = $('#aiBtn'), out = $('#aiOut');
     btn.disabled = true; out.innerHTML = '<p class="muted">해석 중…</p>';
+    let userMsg = '[사주 데이터]\n' + chartText(current);
+    const q = $('#aiQ').value.trim().slice(0, 500);
+    if (q) userMsg += '\n\n[사용자 질문]\n' + q;
     try {
-      const res = await fetch('/api/ai', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chart: chartText(current), question: $('#aiQ').value.trim() }),
+      const res = await fetch(GEMINI_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents: [{ role: 'user', parts: [{ text: userMsg }] }],
+          generationConfig: { maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 1024 } },
+        }),
       });
-      if (!res.ok) { out.innerHTML = `<div class="warn">${esc(await res.text())}</div>`; return; }
+      if (!res.ok) { out.innerHTML = `<div class="warn">${esc(geminiError(res.status, await res.text()))}</div>`; return; }
       const reader = res.body.getReader(), dec = new TextDecoder();
-      let text = '';
+      let buf = '', text = '', finish = '';
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        text += dec.decode(value, { stream: true });
-        out.innerHTML = md(text);
+        buf += dec.decode(value, { stream: true });
+        let i;
+        while ((i = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+          if (!line.startsWith('data:')) continue;
+          let ev; try { ev = JSON.parse(line.slice(5)); } catch (e) { continue; }
+          const c = (ev.candidates || [])[0];
+          if (!c) { if (ev.promptFeedback && ev.promptFeedback.blockReason) finish = 'BLOCKED'; continue; }
+          for (const part of (c.content && c.content.parts) || []) if (part.text && !part.thought) text += part.text;
+          if (c.finishReason) finish = c.finishReason;
+        }
+        out.innerHTML = md(text) || '<p class="muted">해석 중…</p>';
       }
+      if (finish === 'MAX_TOKENS') out.innerHTML += '<p class="muted small">(답변이 길어 중간에 잘렸습니다.)</p>';
+      else if (finish === 'SAFETY' || finish === 'BLOCKED') out.innerHTML += '<div class="warn">AI가 이 요청에 대한 답변을 거절했습니다.</div>';
+      else if (!text) out.innerHTML = '<div class="warn">AI가 빈 응답을 보냈습니다. 다시 시도해 주세요.</div>';
     } catch (e) {
-      out.innerHTML = `<div class="warn">AI 서버에 연결하지 못했습니다. server.py로 실행 중인지 확인해 주세요. (${esc(e.message)})</div>`;
-    } finally { btn.disabled = false; }
+      out.innerHTML = `<div class="warn">Gemini에 연결하지 못했습니다. 인터넷 연결을 확인해 주세요. (${esc(e.message)})</div>`;
+    } finally { renderKey(); }
   };
 })();
