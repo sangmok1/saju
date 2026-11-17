@@ -57,6 +57,7 @@
   }
 
   let current = null;
+  let yongBasis = 'eokbu';
   $('#form').addEventListener('submit', e => {
     e.preventDefault();
     $('#err').hidden = true;
@@ -73,7 +74,7 @@
         y: dt.y, m: dt.m, d: dt.d, h: tm ? tm.h : null, mi: tm ? tm.mi : null,
         lon: parseFloat($('#lon').value) || 126.98, tz: 'Asia/Seoul',
         solarCorrect: $('#solarCorrect').checked, ziMode: getZi(), cityIdx: +city.value,
-        dateRaw: $('#date').value, timeRaw: $('#time').value, noTime: $('#noTime').checked,
+        dateRaw: $('#date').value, timeRaw: $('#time').value, noTime: $('#noTime').checked, yongBasis,
       };
       const t0 = performance.now();
       current = S.compute(opts);
@@ -100,6 +101,7 @@
       $('#leapWrap').hidden = o.calendar !== 'lunar'; $('#leap').checked = !!o.leap;
       if (o.cityIdx !== undefined) city.value = o.cityIdx; $('#lon').value = o.lon;
       $('#solarCorrect').checked = o.solarCorrect !== false;
+      if (o.yongBasis) yongBasis = o.yongBasis;
     }
   } catch (e) { }
 
@@ -119,7 +121,7 @@
 
   // ---------- 렌더 ----------
   function render(r) {
-    renderSummary(r); renderChart(r); renderElements(r); renderBalance(r); renderGuide(r);
+    renderSummary(r); renderChart(r); renderFit(r); renderElements(r); renderBalance(r); renderGuide(r);
     renderRelations(r); renderSinsal(r); renderDaeun(r); renderSeun(r);
     $('#aiOut').innerHTML = '';
   }
@@ -195,6 +197,37 @@
       <div class="kv">${many}${few}</div>`;
   }
 
+  function renderFit(r) {
+    const ys = r.yongsin, C = ys.candidates;
+    const row = (el, role) => {
+      const o = I.OHAENG[el];
+      return `<li><span class="fit-el e${el}">${S.EL_H[el]}</span><div><b>${S.EL_K[el]}</b> <span class="muted small">${role}</span><br><span class="small muted">${o.color} · ${o.dir} · ${o.season}</span></div></li>`;
+    };
+    const opt = k => {
+      const c = C[k], lab = { eokbu: '억부', johu: '조후', tonggwan: '통관' }[k];
+      return `<button type="button" data-basis="${k}" class="${ys.wanted === k ? 'on' : ''}"${c.el === null ? ' title="이 사주에는 해당 없음"' : ''}>${lab}<small>${c.el === null ? '–' : S.EL_H[c.el]}</small></button>`;
+    };
+    const johuHint = ys.basis !== 'johu' && C.johu.el !== null && ![ys.yongEl, ys.huiEl].includes(C.johu.el)
+      ? `<p class="small muted">조후로는 ${ELN(C.johu.el)}도 보조로 좋습니다.</p>` : '';
+    $('#fit').innerHTML = `
+      <div class="fit-basis"><span class="small muted">용신 기준</span><div class="seg mini">${opt('eokbu')}${opt('johu')}${opt('tonggwan')}</div></div>
+      ${ys.fallback ? `<p class="small fit-note">${ys.fallback}</p>` : ''}
+      <h3 class="fit-h good">나와 맞는 기운</h3>
+      <ul>${row(ys.yongEl, '용신')}${row(ys.huiEl, '희신')}</ul>${johuHint}
+      <h3 class="fit-h bad">안 맞는 기운</h3>
+      <ul>${row(ys.giEl, '기신')}${row(ys.guEl, '구신')}</ul>
+      <p class="small muted">${ys.basisLabel} 기준 규칙 계산이라 참고용입니다. 기준을 바꾸면 대운·세운 평가와 AI 해석도 함께 바뀝니다.</p>`;
+  }
+  $('#fit').addEventListener('click', e => {
+    const b = e.target.closest('button[data-basis]');
+    if (!b || !current || b.dataset.basis === yongBasis) return;
+    yongBasis = b.dataset.basis;
+    const opts = { ...current.input, yongBasis };
+    current = S.compute(opts);
+    render(current);
+    try { localStorage.setItem('lastInput', JSON.stringify(opts)); } catch (er) { }
+  });
+
   function renderBalance(r) {
     const st = r.strength, ys = r.yongsin;
     const chip = (label, el) => `<span class="chip e${el}">${label}<b>${ELN(el)}</b></span>`;
@@ -209,7 +242,8 @@
       </div>
       <div class="chips">${chip('용신 ', ys.yongEl)}${chip('희신 ', ys.huiEl)}${chip('기신 ', ys.giEl)}${chip('구신 ', ys.guEl)}</div>
       <div class="kv">
-        <p><b>억부 용신: ${ys.yong}(${ELN(ys.yongEl)})</b> — ${ys.reason}</p>
+        <p><b>${ys.basisLabel} 용신: ${ys.yong}(${ELN(ys.yongEl)})</b> — ${ys.reason}</p>
+        ${ys.fallback ? `<p class="muted small">${ys.fallback}</p>` : ''}
         ${ys.johu ? `<p><b>조후</b> — ${ys.johu.text}${ys.johu.el !== null && ys.johu.el !== ys.yongEl ? ` 억부 용신과 별도로 ${ELN(ys.johu.el)}을(를) 보조로 함께 고려하세요.` : ''}</p>` : ''}
         <p class="muted small">용신은 점수식 근사입니다. 종격·화격 등 특수 구조는 판단이 달라질 수 있습니다.</p>
       </div>`;
@@ -333,27 +367,33 @@
       ...r.pillars.map(P),
       `오행 개수(목화토금수): ${r.elCount.join('/')}, 세력%: ${r.elWeighted.map(v => v.toFixed(1)).join('/')}`,
       `신강약: ${r.strength.label}(지원 ${r.strength.score}%, 득령 ${r.strength.deukryeong}, 득지 ${r.strength.deukji}, 득세 ${r.strength.deukse})`,
-      `억부 용신(규칙 기반 추정): ${r.yongsin.yong} ${S.EL_K[r.yongsin.yongEl]}, 희신 ${S.EL_K[r.yongsin.huiEl]}, 기신 ${S.EL_K[r.yongsin.giEl]}${r.yongsin.johu ? `, 조후: ${r.yongsin.johu.text}` : ''}`,
+      `사용자가 고른 용신 기준: ${r.yongsin.basisLabel}${r.yongsin.fallback ? ' (요청한 기준이 해당 없어 억부로 대체)' : ''}. 용신(규칙 기반 추정): ${r.yongsin.yong} ${S.EL_K[r.yongsin.yongEl]}, 희신 ${S.EL_K[r.yongsin.huiEl]}, 기신 ${S.EL_K[r.yongsin.giEl]}, 구신 ${S.EL_K[r.yongsin.guEl]}`,
+      `기준별 용신 후보: ${['eokbu', 'johu', 'tonggwan'].map(k => `${{ eokbu: '억부', johu: '조후', tonggwan: '통관' }[k]} ${r.yongsin.candidates[k].el === null ? '해당 없음' : S.EL_K[r.yongsin.candidates[k].el]}`).join(', ')}${r.yongsin.johu ? ` / 조후 설명: ${r.yongsin.johu.text}` : ''}`,
       `격국: ${r.gyeok.name}`,
       `합충: ${r.relations.map(x => `${x.text}(${x.where})`).join(', ') || '없음'}`,
       `신살: ${r.sinsal.map(x => `${x.name}(${x.label})`).join(', ') || '없음'}, 공망: ${r.gongmang.map(b => S.BR_H[b]).join('')}`,
-      `대운(${r.daeun.forward ? '순행' : '역행'}, 대운수 ${r.daeun.daeunNum}): ${r.daeun.list.map(d => `${d.age}세 ${S.STEM_H[d.s]}${S.BR_H[d.b]}`).join(', ')}`,
+      `대운(${r.daeun.forward ? '순행' : '역행'}, 대운수 ${r.daeun.daeunNum}): ${r.daeun.list.map(d => `${d.age}세(${d.startYear}년~) ${S.STEM_H[d.s]}${S.BR_H[d.b]}`).join(', ')}`,
       `현재 대운: ${r.daeun.current ? S.STEM_H[r.daeun.current.s] + S.BR_H[r.daeun.current.b] : '대운 전'}`,
-      `세운: ${r.seun.slice(0, 5).map(d => `${d.year} ${S.STEM_H[d.s]}${S.BR_H[d.b]}`).join(', ')}`,
+      `세운: ${r.seun.map(d => `${d.year} ${S.STEM_H[d.s]}${S.BR_H[d.b]}`).join(', ')}`,
     ].join('\n');
   }
 
   function md(t) {
-    const lines = esc(t).split('\n'); let out = '', inList = false;
+    const lines = esc(t).split('\n'); let out = '', inList = false, inSum = false;
     for (let l of lines) {
       l = l.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`(.+?)`/g, '<code>$1</code>');
       if (/^\s*[-*] /.test(l)) { if (!inList) { out += '<ul>'; inList = true; } out += `<li>${l.replace(/^\s*[-*] /, '')}</li>`; continue; }
       if (inList) { out += '</ul>'; inList = false; }
-      if (/^#{1,2} /.test(l)) out += `<h3>${l.replace(/^#+ /, '')}</h3>`;
+      if (/^#{1,2} /.test(l)) {
+        const h = l.replace(/^#+ /, '');
+        if (inSum) { out += '</div>'; inSum = false; }
+        if (/핵심 요약/.test(h)) { out += '<div class="ai-sum">'; inSum = true; }
+        out += `<h3>${h}</h3>`;
+      }
       else if (/^#{3,} /.test(l)) out += `<h4>${l.replace(/^#+ /, '')}</h4>`;
       else if (l.trim()) out += `<p>${l}</p>`;
     }
-    return out + (inList ? '</ul>' : '');
+    return out + (inList ? '</ul>' : '') + (inSum ? '</div>' : '');
   }
 
   // ---------- AI 해석 (Gemini, 브라우저에서 직접 호출) ----------
@@ -363,8 +403,18 @@
 사용자의 원국·대운·세운은 이미 만세력 프로그램이 정확히 계산해 두었습니다. 기둥(간지)을 다시 계산하거나 바꾸지 말고, 주어진 데이터를 근거로 해석하세요.
 프로그램이 제시한 용신은 규칙 기반 추정치이므로, 원국 전체(조후, 격국, 합충, 통근 여부)를 보고 동의하거나 다르게 판단되면 이유와 함께 말해 주세요.
 
-다음 순서로 한국어 마크다운으로 답하세요(각 소제목은 '## '로 시작):
-## 한 줄 요약
+다음 순서로 한국어 마크다운으로 답하세요(각 소제목은 '## '로 시작).
+
+먼저 바쁜 사람이 이것만 읽어도 되는 요약을 씁니다:
+## 핵심 요약
+- **한 줄**: 이 사주를 한 문장으로
+- **질문에 대한 결론**: 사용자가 질문을 남겼을 때만, 결론을 1~2문장으로 먼저
+- **좋은 시기**: 2~3개. "2027~2036년(38~47세, 丙午 대운): 이유 한 줄" 형식
+- **조심할 시기**: 2~3개. 같은 형식
+- **올해·내년**: 각각 한 줄
+시기는 데이터에 있는 대운 시작 연도와 세운 연도를 그대로 써서 연도와 나이를 함께 적고, 질문이 있으면 그 질문과 관련된 시기를 우선합니다.
+
+그다음 상세 내용:
 ## 타고난 성향과 기질
 ## 사주의 구조와 용신 판단
 ## 재물·직업 방향
@@ -372,7 +422,7 @@
 ## 대운 흐름 (지금 대운과 앞으로의 큰 전환점)
 ## 올해와 내년
 ## 실천 조언 (3~5개, 구체적으로)
-사용자가 질문을 남겼다면 마지막에 '## 질문에 대한 답'을 추가하세요.
+사용자가 질문을 남겼다면 마지막에 '## 질문에 대한 답'으로 근거를 자세히 풀어 주세요.
 
 원칙: 근거가 되는 글자(예: 월지 午의 정관)를 짚으며 설명하고, 운명론적 단정·공포 조장·의료/법률/투자에 대한 확정적 지시는 피하며, 균형 있고 실용적으로 씁니다. 전체 분량은 1500~2500자 정도로 간결하게.`;
 

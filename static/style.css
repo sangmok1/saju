@@ -136,3 +136,22 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 #aiCard > .row, .keybox .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .link { background: none; border: 0; color: var(--accent); font: inherit; font-size: 14px; padding: 4px 6px; cursor: pointer; }
 input[type=password] { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; width: 100%; min-width: 0; }
+.ai-sum { border: 1px solid var(--accent); border-radius: 10px; padding: 4px 16px 10px; margin-bottom: 18px; background: var(--bg); }
+.ai-sum h3 { color: var(--accent); }
+.ai-sum li { margin: 4px 0; }
+
+/* 맞는 기운 · 안 맞는 기운 */
+.chart-wrap { display: grid; grid-template-columns: 1fr 210px; gap: 16px; align-items: start; }
+.fit { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--bg); }
+.fit-h { font-size: 14px; margin: 4px 0 6px; }
+.fit-h.good { color: var(--g2); } .fit-h.bad { color: var(--b2); }
+.fit ul { list-style: none; margin: 0 0 8px; padding: 0; }
+.fit li { display: flex; gap: 10px; align-items: center; margin: 6px 0; line-height: 1.35; }
+.fit-el { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 8px; font: 700 18px 'Noto Serif KR', serif; flex: none; }
+.fit p { margin: 4px 0 0; }
+@media (max-width: 760px) { .chart-wrap { grid-template-columns: 1fr; } }
+.fit-basis { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.seg.mini { display: flex; width: 100%; }
+.seg.mini button { flex: 1; padding: 6px 4px; font-size: 13px; line-height: 1.2; }
+.seg.mini button small { display: block; font-size: 12px; opacity: .8; }
+.fit-note { margin: 0 0 6px; padding: 6px 8px; border-radius: 6px; background: var(--card); color: var(--muted); }

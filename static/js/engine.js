@@ -244,7 +244,7 @@
     }
 
     const strength = calcStrength(pillars, ds);
-    const yongsin = calcYongsin(strength, groupCount, dayEl, monthGz.b, elCount);
+    const yongsin = applyYongBasis(calcYongsin(strength, groupCount, dayEl, monthGz.b, elCount), elWeighted, dayEl, opts.yongBasis);
     const gyeok = calcGyeok(pillars, ds, monthGz.b);
     const relations = calcRelations(pillars);
     const sinsal = calcSinsal(pillars, ds, yearGz, dayGz);
@@ -473,6 +473,47 @@
     // 중복 제거
     const seen = new Set();
     return out.filter(o => { const k = o.name + o.key; if (seen.has(k)) return false; seen.add(k); return true; });
+  }
+
+  // 용신 기준: 억부(기본) · 조후 · 통관. 고른 기준이 해당 없으면 억부로 돌아간다.
+  const BASIS_LABEL = { eokbu: '억부', johu: '조후', tonggwan: '통관' };
+  function calcTonggwan(elWeighted) {
+    const total = elWeighted.reduce((a, b) => a + b, 0) || 1;
+    const pct = elWeighted.map(v => v / total * 100);
+    let best = null;
+    for (let a = 0; a < 5; a++) {
+      const b = mod(a + 2, 5);              // a가 b를 극한다
+      if (pct[a] >= 25 && pct[b] >= 25) {
+        const score = Math.min(pct[a], pct[b]);
+        if (!best || score > best.score) best = { a, b, el: mod(a + 1, 5), score };
+      }
+    }
+    if (!best) return { el: null, text: '두 기운이 정면으로 크게 부딪치는 구조가 아니라 통관 용신이 필요하지 않습니다.' };
+    const K = i => `${EL_K[i]}(${EL_H[i]})`;
+    return { el: best.el, a: best.a, b: best.b, text: `${K(best.a)}·${K(best.b)} 두 기운이 모두 강해 정면으로 부딪칩니다(${EL_H[best.a]}剋${EL_H[best.b]}). ${K(best.a)}의 힘을 받아 ${K(best.b)} 쪽으로 넘겨 주는 ${K(best.el)} 기운이 둘 사이를 이어 줍니다.` };
+  }
+  function applyYongBasis(base, elWeighted, dayEl, basis) {
+    const tong = calcTonggwan(elWeighted);
+    const candidates = {
+      eokbu: { el: base.yongEl, text: base.reason },
+      johu: base.johu && base.johu.el !== null
+        ? { el: base.johu.el, text: base.johu.text }
+        : { el: null, text: base.johu ? base.johu.text + ' 한 가지 오행으로 정하기 어려워 조후 용신을 따로 두지 않습니다.' : '봄·가을 환절기처럼 덥거나 춥지 않은 계절이라 조후가 크게 필요하지 않습니다.' },
+      tonggwan: tong,
+    };
+    const want = BASIS_LABEL[basis] ? basis : 'eokbu';
+    const used = candidates[want].el === null ? 'eokbu' : want;
+    const yongEl = candidates[used].el;
+    const giEl = mod(yongEl - 2, 5);
+    return {
+      ...base,
+      yong: ['비겁', '식상', '재성', '관성', '인성'][mod(yongEl - dayEl, 5)],
+      yongEl, huiEl: mod(yongEl - 1, 5), giEl, guEl: mod(giEl - 1, 5),
+      reason: candidates[used].text,
+      basis: used, basisLabel: BASIS_LABEL[used], wanted: want,
+      fallback: used !== want ? `${BASIS_LABEL[want]} 기준은 이 사주에 해당하지 않아 억부 기준으로 보여 줍니다. ${candidates[want].text}` : '',
+      candidates,
+    };
   }
 
   function rateLuck(s, b, ys) {
