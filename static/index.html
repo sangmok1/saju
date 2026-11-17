@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사주 만세력</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700;900&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <h1>사주 만세력 <small>四柱萬歲曆</small></h1>
+    <button id="themeBtn" class="ghost" title="밝게/어둡게">◐</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <form id="form" class="card form" autocomplete="off">
+    <div class="row">
+      <label class="f grow">이름 <span class="muted">(선택)</span>
+        <input id="name" type="text" placeholder="홍길동">
+      </label>
+      <div class="f">성별
+        <div class="seg" id="gender">
+          <button type="button" data-v="M" class="on">남</button><button type="button" data-v="F">여</button>
+        </div>
+      </div>
+      <div class="f">달력
+        <div class="seg" id="calendar">
+          <button type="button" data-v="solar" class="on">양력</button><button type="button" data-v="lunar">음력</button>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <label class="f grow">생년월일
+        <input id="date" type="text" inputmode="numeric" placeholder="19900515 또는 1990-05-15" required>
+      </label>
+      <label class="f chk" id="leapWrap" hidden><input id="leap" type="checkbox"> 윤달</label>
+      <label class="f grow">태어난 시각
+        <input id="time" type="text" inputmode="numeric" placeholder="1430 또는 14:30">
+      </label>
+      <label class="f chk"><input id="noTime" type="checkbox"> 시간 모름</label>
+    </div>
+    <div class="row">
+      <label class="f grow">출생지 (경도 보정용)
+        <select id="city"></select>
+      </label>
+      <label class="f" style="width:110px">경도
+        <input id="lon" type="number" step="0.01" value="126.98">
+      </label>
+    </div>
+    <details class="adv">
+      <summary>계산 방식 설정</summary>
+      <div class="row">
+        <label class="f chk"><input id="solarCorrect" type="checkbox" checked> 진태양시(경도) 보정 — 서울 기준 약 −32분</label>
+      </div>
+      <div class="row">
+        <div class="f">자시(23~01시) 처리
+          <div class="seg" id="ziMode">
+            <button type="button" data-v="midnight" class="on">야자시·조자시 구분 (0시에 날 바뀜)</button><button type="button" data-v="zi23">23시에 날 바뀜</button>
+          </div>
+        </div>
+      </div>
+      <p class="muted small">서머타임(1948~60, 1987~88)과 1954~61년 표준시(UTC+8:30)는 자동 반영됩니다. 연·월주는 절기 입절 시각(분 단위)으로 가릅니다.</p>
+    </details>
+    <button class="primary" type="submit">사주 보기</button>
+    <p id="err" class="err" hidden></p>
+  </form>
+
+  <div id="result" hidden>
+    <section class="card" id="summary"></section>
+    <section class="card"><h2>원국 <small>四柱八字</small></h2><div id="chart"></div></section>
+    <div class="grid2">
+      <section class="card"><h2>오행 분포</h2><div id="elements"></div></section>
+      <section class="card"><h2>힘의 균형과 용신</h2><div id="balance"></div></section>
+    </div>
+    <section class="card"><h2>해석 가이드 <small>어떤 방향으로 읽어야 하나</small></h2><div id="guide"></div></section>
+    <div class="grid2">
+      <section class="card"><h2>합·충·형·파·해</h2><div id="relations"></div></section>
+      <section class="card"><h2>신살</h2><div id="sinsal"></div></section>
+    </div>
+    <section class="card"><h2>대운 <small>10년 단위의 큰 흐름</small></h2><div id="daeun"></div></section>
+    <section class="card"><h2>세운 <small>해마다의 흐름</small></h2><div id="seun"></div></section>
+    <section class="card" id="aiCard">
+      <h2>AI 심층 해석 <small>선택</small></h2>
+      <div class="row">
+        <input id="aiQ" class="grow" type="text" placeholder="궁금한 점(선택) — 예: 올해 이직해도 될까? 나와 맞는 직업은?">
+        <button id="aiBtn" class="primary sm" type="button">AI 해석 받기</button>
+      </div>
+      <div id="aiOut" class="ai-out"></div>
+    </section>
+    <p class="muted small center">명리학은 통계적·전통적 해석 체계입니다. 이 결과는 참고용이며 중요한 결정의 유일한 근거로 삼지 마세요.</p>
+  </div>
+</main>
+
+<script src="vendor/lunar.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/interp.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
