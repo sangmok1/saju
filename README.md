@@ -15,7 +15,7 @@ python3 server.py
 
 방문자는 키 없이 [AI 해석 받기]를 누르면 됩니다. 서버가 `gemini-3.5-flash-lite`를 대신 호출합니다.
 
-- 키: 서버 환경변수 `GEMINI_API_KEY` (Cloud Run에서는 Secret Manager `gemini-api-key`를 주입)
+- 키: 서버 환경변수 `GEMINI_API_KEY` (Cloud Run에서는 Secret Manager `gemini-key`, saju 전용 키를 주입)
 - 사용 제한: 하루 전체 `AI_DAILY_LIMIT`(200)회, 1인(IP) 하루 `AI_PER_IP_LIMIT`(5)회. 한국 시간 자정에 초기화
 - 사용량 기록: `USAGE_BUCKET`(GCS)의 `usage/날짜.json`. IP는 해시로만 남고 30일 뒤 자동 삭제. 버킷이 없으면 메모리에만 저장(로컬용)
 - 시스템 프롬프트는 서버에 있어 사주 해석 외 용도로 쓰기 어렵습니다.
@@ -27,7 +27,7 @@ python3 server.py
 ```bash
 gcloud run deploy saju --source . --project personal-stock-trader --region asia-northeast3 \
   --service-account saju-runtime@personal-stock-trader.iam.gserviceaccount.com --max-instances 1 \
-  --set-secrets=GEMINI_API_KEY=gemini-api-key:latest \
+  --set-secrets=GEMINI_API_KEY=gemini-key:latest \
   --set-env-vars=USAGE_BUCKET=personal-stock-trader-saju-usage,AI_DAILY_LIMIT=200,AI_PER_IP_LIMIT=5
 ```
 
