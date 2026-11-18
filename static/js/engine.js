@@ -539,8 +539,79 @@
     return hits;
   }
 
+  // ---------- 일진(그날의 간지) 운세 ----------
+  // 지금 이 순간(UTC ms)의 연주·월주 — 절기 입절 시각 기준
+  function yearMonthAt(utc) {
+    const jies = jieListAround(utc);
+    let prev = null;
+    for (const j of jies) { if (j.ms <= utc) prev = j; else break; }
+    const kstY = new Date(utc + 9 * 3600e3).getUTCFullYear();
+    const lc = jies.find(j => j.branch === 2 && new Date(j.ms + 8 * 3600e3).getUTCFullYear() === kstY);
+    const beforeLc = lc ? utc < lc.ms : new Date(utc + 9 * 3600e3).getUTCMonth() === 0;
+    const yearGz = gzOf(mod((beforeLc ? kstY - 1 : kstY) - 4, 60));
+    const ms = mod((yearGz.s % 5) * 2 + 2 + mod(prev.branch - 2, 12), 10);
+    return { year: yearGz, month: gzOf(gzIndex(ms, prev.branch)) };
+  }
+
+  const CHEONEUL = [[1, 7], [0, 8], [11, 9], [11, 9], [1, 7], [0, 8], [1, 7], [2, 6], [5, 3], [5, 3]];
+  // 운의 간지(s,b)가 원국과 맺는 작용. good: 길한 작용, bad: 조심할 작용
+  function dayHits(s, b, pillars, ds) {
+    const out = [];
+    const pair = (x, p, q) => (x === p && b === q) || (x === q && b === p);
+    for (const p of pillars) {
+      if (p.empty) continue;
+      const x = p.branch, pos = p.key;
+      if (Math.abs(x - b) === 6) out.push({ type: '충', pos, bad: true });
+      if (mod(x + b, 12) === 1) out.push({ type: '육합', pos, good: true });
+      if ([[2, 5], [5, 8], [2, 8], [1, 10], [10, 7], [1, 7], [0, 3]].some(([u, v]) => pair(x, u, v)) || (x === b && [4, 6, 9, 11].includes(b))) out.push({ type: '형', pos, bad: true });
+      if (pos === 'day' && [[0, 7], [1, 6], [2, 9], [3, 8], [4, 11], [5, 10]].some(([u, v]) => pair(x, u, v))) out.push({ type: '원진', pos, bad: true });
+      if (p.key !== 'day' && Math.abs(p.stem - s) === 5) out.push({ type: '천간합', pos, good: true });
+      if (p.key === 'day' && Math.abs(ds - s) === 5) out.push({ type: '천간합', pos, good: true });
+    }
+    if (CHEONEUL[ds].includes(b)) out.push({ type: '천을귀인', pos: null, good: true });
+    return out;
+  }
+
+  function rateDay(v) {
+    if (v >= 2.4) return { label: '매우 좋음', cls: 'g2' };
+    if (v >= 0.9) return { label: '좋음', cls: 'g1' };
+    if (v > -0.9) return { label: '보통', cls: 'g0' };
+    if (v > -2.4) return { label: '주의', cls: 'b1' };
+    return { label: '조심', cls: 'b2' };
+  }
+
+  /** r: compute() 결과, (y,m,d): 한국 날짜 */
+  function dayLuck(r, y, m, d) {
+    const g = gzOf(dayGzIndex(y, m, d));
+    const ds = r.dayStem;
+    const base = rateLuck(g.s, g.b, r.yongsin);
+    const hits = dayHits(g.s, g.b, r.pillars, ds);
+    let adj = 0;
+    for (const h of hits) {
+      if (h.type === '충') adj -= h.pos === 'day' ? 1.2 : 0.6;
+      else if (h.type === '형' || h.type === '원진') adj -= h.pos === 'day' ? 0.6 : 0.3;
+      else if (h.type === '천을귀인') adj += 0.8;
+      else if (h.good) adj += 0.3;
+    }
+    const v = Math.round((base.v + adj) * 10) / 10;
+    return {
+      y, m, d, wd: new Date(Date.UTC(y, m - 1, d)).getUTCDay(),
+      idx: g.idx, s: g.s, b: g.b,
+      stemSipsin: sipsin(ds, g.s), branchSipsin: sipsin(ds, BR_MAIN[g.b]),
+      unseong: unseong(ds, g.b), hits, base: base.v, v, rating: rateDay(v),
+    };
+  }
+
+  function monthLuck(r, utc) {
+    const { month } = yearMonthAt(utc);
+    return {
+      s: month.s, b: month.b, stemSipsin: sipsin(r.dayStem, month.s), branchSipsin: sipsin(r.dayStem, BR_MAIN[month.b]),
+      rating: rateLuck(month.s, month.b, r.yongsin), hits: dayHits(month.s, month.b, r.pillars, r.dayStem),
+    };
+  }
+
   global.Saju = {
-    compute, STEM_H, STEM_K, BR_H, BR_K, BR_ANIMAL, EL_K, EL_H, STEM_EL, BR_EL, SIPSIN, SIPSIN_GROUP,
+    compute, dayLuck, monthLuck, STEM_H, STEM_K, BR_H, BR_K, BR_ANIMAL, EL_K, EL_H, STEM_EL, BR_EL, SIPSIN, SIPSIN_GROUP,
     UNSEONG, SINSAL12, BR_MAIN, groupOfElement, elementOfGroup, mod,
   };
 })(typeof window !== 'undefined' ? window : this);

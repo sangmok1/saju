@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f6f1e7">
 <title>사주 만세력</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,7 +23,7 @@
   <form id="form" class="card form" autocomplete="off">
     <div class="row">
       <label class="f grow">이름 <span class="muted">(선택)</span>
-        <input id="name" type="text" placeholder="홍길동">
+        <input id="name" type="text" autocomplete="off" placeholder="홍길동">
       </label>
       <div class="f">성별
         <div class="seg" id="gender">
@@ -37,11 +38,11 @@
     </div>
     <div class="row">
       <label class="f grow">생년월일
-        <input id="date" type="text" inputmode="numeric" placeholder="19900515 또는 1990-05-15" required>
+        <input id="date" type="text" autocomplete="off" inputmode="numeric" placeholder="19900515 또는 1990-05-15" required>
       </label>
       <label class="f chk" id="leapWrap" hidden><input id="leap" type="checkbox"> 윤달</label>
       <label class="f grow">태어난 시각
-        <input id="time" type="text" inputmode="numeric" placeholder="1430 또는 14:30">
+        <input id="time" type="text" autocomplete="off" inputmode="numeric" placeholder="1430 또는 14:30">
       </label>
       <label class="f chk"><input id="noTime" type="checkbox"> 시간 모름</label>
     </div>
@@ -73,6 +74,8 @@
 
   <div id="result" hidden>
     <section class="card" id="summary"></section>
+    <section class="card" id="today"></section>
+    <section class="card" id="week"></section>
     <section class="card"><h2>원국 <small>四柱八字</small></h2><div class="chart-wrap"><div id="chart"></div><aside id="fit" class="fit"></aside></div></section>
     <div class="grid2">
       <section class="card"><h2>오행 분포</h2><div id="elements"></div></section>

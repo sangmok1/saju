@@ -81,7 +81,6 @@
       render(current);
       current.ms = performance.now() - t0;
       $('#calcMs').textContent = current.ms.toFixed(1);
-      try { localStorage.setItem('lastInput', JSON.stringify(opts)); } catch (er) { }
       $('#result').hidden = false;
       $('#result').scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (er) {
@@ -91,19 +90,18 @@
     }
   });
 
-  // 마지막 입력 복원
-  try {
-    const o = JSON.parse(localStorage.getItem('lastInput') || 'null');
-    if (o) {
-      $('#name').value = o.name || ''; $('#date').value = o.dateRaw || ''; $('#time').value = o.timeRaw || '';
-      $('#noTime').checked = !!o.noTime; $('#time').disabled = !!o.noTime;
-      setSeg('gender', o.gender); setSeg('calendar', o.calendar); setSeg('ziMode', o.ziMode);
-      $('#leapWrap').hidden = o.calendar !== 'lunar'; $('#leap').checked = !!o.leap;
-      if (o.cityIdx !== undefined) city.value = o.cityIdx; $('#lon').value = o.lon;
-      $('#solarCorrect').checked = o.solarCorrect !== false;
-      if (o.yongBasis) yongBasis = o.yongBasis;
-    }
-  } catch (e) { }
+  // 새로고침하면 처음 상태로: 예전 버전이 저장해 둔 입력값을 지우고, 브라우저 자동 복원도 막는다
+  try { localStorage.removeItem('lastInput'); } catch (e) { }
+  function resetAll() {
+    $('#form').reset();
+    setSeg('gender', 'M'); setSeg('calendar', 'solar'); setSeg('ziMode', 'midnight');
+    $('#leapWrap').hidden = true; $('#time').disabled = false; city.value = 0; $('#lon').value = CITIES[0][1];
+    $('#aiQ').value = ''; $('#aiOut').innerHTML = ''; $('#err').hidden = true;
+    $('#result').hidden = true; current = null; yongBasis = 'eokbu';
+  }
+  resetAll();
+  // 뒤로가기 캐시(bfcache)로 돌아왔을 때도 비운다
+  window.addEventListener('pageshow', e => { if (e.persisted && !location.search) { resetAll(); scrollTo(0, 0); } });
 
   // URL 파라미터로 바로 보기: ?d=19900515&t=1430&g=F&c=lunar&leap=1&n=이름
   (() => {
@@ -121,7 +119,7 @@
 
   // ---------- 렌더 ----------
   function render(r) {
-    renderSummary(r); renderChart(r); renderFit(r); renderElements(r); renderBalance(r); renderGuide(r);
+    renderSummary(r); renderToday(r); renderWeek(r, 0); renderChart(r); renderFit(r); renderElements(r); renderBalance(r); renderGuide(r);
     renderRelations(r); renderSinsal(r); renderDaeun(r); renderSeun(r);
     $('#aiOut').innerHTML = '';
   }
@@ -150,6 +148,123 @@
       </div>
       ${r.notes.length ? `<div class="notes">${r.notes.map(n => `<div>${esc(n)}</div>`).join('')}</div>` : ''}
       <p class="muted small" style="margin:8px 0 0">계산 <span id="calcMs"></span>ms</p>`;
+  }
+
+  // ---------- 오늘의 운세 · 이번 주 (일진 기반) ----------
+  const WD = ['일', '월', '화', '수', '목', '금', '토'];
+  const POS_SHORT = { year: '연지', month: '월지', day: '일지', hour: '시지' };
+  function kstDate(offsetDays = 0) {
+    const t = new Date(Date.now() + 9 * 3600e3 + offsetDays * 86400e3);
+    return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() };
+  }
+  const addDays = (o, n) => { const t = new Date(Date.UTC(o.y, o.m - 1, o.d) + n * 86400e3); return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() }; };
+  const sameDay = (a, b) => a.y === b.y && a.m === b.m && a.d === b.d;
+  const gzName = x => `${S.STEM_H[x.s]}${S.BR_H[x.b]}(${S.STEM_K[x.s]}${S.BR_K[x.b]})`;
+  function roleOf(el, ys) {
+    return el === ys.yongEl ? '용신' : el === ys.huiEl ? '희신' : el === ys.giEl ? '기신' : el === ys.guEl ? '구신' : '한신';
+  }
+  function elLine(x, ys) {
+    const part = (el, where) => {
+      const role = roleOf(el, ys);
+      const tone = role === '용신' || role === '희신' ? 'good' : role === '기신' || role === '구신' ? 'bad' : '';
+      return `${where} <b class="t${el}">${S.EL_K[el]}</b><span class="role ${tone}">${role}</span>`;
+    };
+    return `${part(elOfStem(x.s), '천간')} · ${part(elOfBr(x.b), '지지')}`;
+  }
+  // 그날 하면 좋은 것 / 조심할 것
+  function dayAdvice(x) {
+    const a = I.DAY_SIPSIN[SS(x.stemSipsin)], b = I.DAY_SIPSIN[SS(x.branchSipsin)];
+    const good = [a.good], care = [a.care];
+    if (b !== a) { good.push(b.good); care.push(b.care); }
+    for (const h of x.hits) (h.bad ? care : good).push(I.HIT_TEXT[h.type](h.pos));
+    return { good, care };
+  }
+  function dayDetail(x, r, title) {
+    const adv = dayAdvice(x);
+    const bad = x.rating.cls === 'b1' || x.rating.cls === 'b2';
+    const careBox = `<div class="adv-box care"><h4>조심할 것</h4><ul>${adv.care.map(t => `<li>${t}</li>`).join('')}</ul></div>`;
+    const goodBox = `<div class="adv-box good"><h4>하면 좋은 것</h4><ul>${adv.good.map(t => `<li>${t}</li>`).join('')}</ul></div>`;
+    return `<div class="day-head">
+        <div class="day-gz"><span class="t${elOfStem(x.s)}">${S.STEM_H[x.s]}</span><span class="t${elOfBr(x.b)}">${S.BR_H[x.b]}</span></div>
+        <div class="day-meta">
+          <div class="day-title">${title} <span class="rt ${x.rating.cls}">${x.rating.label}</span></div>
+          <div class="small muted">일진 ${gzName(x)} · ${SS(x.stemSipsin)}/${SS(x.branchSipsin)} · ${I.DAY_SIPSIN[SS(x.stemSipsin)].theme}·${I.DAY_SIPSIN[SS(x.branchSipsin)].theme}의 날</div>
+          <div class="small">${elLine(x, r.yongsin)}</div>
+        </div>
+      </div>
+      <div class="adv-grid">${bad ? careBox + goodBox : goodBox + careBox}</div>`;
+  }
+
+  function renderToday(r) {
+    const t = kstDate(), x = S.dayLuck(r, t.y, t.m, t.d);
+    const mo = S.monthLuck(r, Date.now());
+    const sy = r.seun.find(s => s.year === t.y);
+    $('#today').innerHTML = `<h2>오늘의 운세 <small>${t.y}년 ${t.m}월 ${t.d}일 (${WD[x.wd]})</small></h2>
+      ${dayDetail(x, r, '오늘')}
+      <div class="flow small">
+        <div><b>이번 달</b> ${gzName(mo)} 월 · ${SS(mo.stemSipsin)}/${SS(mo.branchSipsin)} <span class="rt ${mo.rating.cls}">${mo.rating.label}</span></div>
+        ${sy ? `<div><b>올해</b> ${gzName(sy)} 년 · ${SS(sy.stemSipsin)}/${SS(sy.branchSipsin)} <span class="rt ${sy.rating.cls}">${sy.rating.label}</span></div>` : ''}
+      </div>
+      <p class="muted small" style="margin:10px 0 0">그날의 간지(일진)를 내 원국·용신(${r.yongsin.basisLabel} 기준 ${ELN(r.yongsin.yongEl)})과 대조한 규칙 기반 풀이입니다. 날짜는 한국 시간 기준이며 참고용입니다.</p>`;
+  }
+
+  let weekOffset = 0;
+  function renderWeek(r, off) {
+    weekOffset = off;
+    const today = kstDate();
+    const wd = new Date(Date.UTC(today.y, today.m - 1, today.d)).getUTCDay();
+    const mon = addDays(today, -((wd + 6) % 7) + off * 7);
+    const days = Array.from({ length: 7 }, (_, i) => { const o = addDays(mon, i); return S.dayLuck(r, o.y, o.m, o.d); });
+    const sun = days[6];
+    const label = off === 0 ? '이번 주' : off === 1 ? '다음 주' : off === -1 ? '지난주' : `${mon.m}/${mon.d} 주`;
+
+    // 이번 주 요약: 좋은 날 / 조심할 날
+    const md = x => `${x.m}/${x.d}(${WD[x.wd]})`;
+    const goodDays = days.filter(x => x.rating.cls === 'g1' || x.rating.cls === 'g2').sort((a, b) => b.v - a.v);
+    const careDays = days.filter(x => x.rating.cls === 'b1' || x.rating.cls === 'b2' || x.hits.some(h => h.type === '충' && h.pos === 'day'));
+    const careLine = x => {
+      const why = [];
+      const dayHit = x.hits.filter(h => h.bad && h.pos === 'day').map(h => `일지 ${h.type}`);
+      if (dayHit.length) why.push(dayHit.join('·'));
+      const roles = [roleOf(elOfStem(x.s), r.yongsin), roleOf(elOfBr(x.b), r.yongsin)];
+      if (roles.some(v => v === '기신' || v === '구신')) why.push(`${roles.includes('기신') ? '기신' : '구신'} 기운`);
+      const otherHit = x.hits.filter(h => h.bad && h.pos !== 'day').map(h => `${POS_SHORT[h.pos]} ${h.type}`);
+      if (otherHit.length) why.push(otherHit.join('·'));
+      return `<li><b>${md(x)}</b> <span class="rt ${x.rating.cls}">${x.rating.label}</span> ${why.length ? `<span class="muted">${why.join(', ')}</span> — ` : ''}${I.DAY_SIPSIN[SS(x.branchSipsin)].care}</li>`;
+    };
+    // 한 주 동안 가장 자주 들어오는 십신 = 이번 주의 주제
+    const cnt = {};
+    days.forEach(x => [x.stemSipsin, x.branchSipsin].forEach(i => { cnt[SS(i)] = (cnt[SS(i)] || 0) + 1; }));
+    const topSs = Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k]) => k);
+
+    $('#week').innerHTML = `
+      <div class="week-head">
+        <h2>${label} 운세 <small>${mon.m}/${mon.d} ~ ${sun.m}/${sun.d}</small></h2>
+        <div class="week-nav">
+          <button type="button" class="ghost" data-off="${off - 1}" aria-label="이전 주">‹</button>
+          ${off !== 0 ? '<button type="button" class="link" data-off="0">이번 주</button>' : ''}
+          <button type="button" class="ghost" data-off="${off + 1}" aria-label="다음 주">›</button>
+        </div>
+      </div>
+      <div class="week">${days.map((x, i) => `<button type="button" class="wd ${x.rating.cls}${sameDay(x, today) ? ' today' : ''}" data-i="${i}">
+          <span class="dw">${WD[x.wd]}</span><span class="dd">${x.m}/${x.d}</span>
+          <span class="g"><span class="t${elOfStem(x.s)}">${S.STEM_H[x.s]}</span><span class="t${elOfBr(x.b)}">${S.BR_H[x.b]}</span></span>
+          <span class="rt ${x.rating.cls}">${x.rating.label}</span></button>`).join('')}</div>
+      <div class="week-sum">
+        <p><b>${label}의 주제</b> ${topSs.map(k => `<span class="tag">${k} · ${I.DAY_SIPSIN[k].theme}</span>`).join('')}</p>
+        <p><b>좋은 날</b> ${goodDays.length ? goodDays.map(x => `${md(x)} <span class="rt ${x.rating.cls}">${x.rating.label}</span>`).join(' ') : '<span class="muted">눈에 띄게 좋은 날은 없고 무난한 한 주입니다.</span>'}</p>
+        <div><b>조심할 날</b>${careDays.length ? `<ul>${careDays.map(careLine).join('')}</ul>` : ' <span class="muted">크게 부딪치는 날이 없습니다.</span>'}</div>
+      </div>
+      <div class="lk-detail" id="wDetail"></div>`;
+    const show = i => {
+      $('#week').querySelectorAll('.wd').forEach(b => b.classList.toggle('sel', +b.dataset.i === i));
+      const x = days[i];
+      $('#wDetail').innerHTML = dayDetail(x, r, `${x.m}월 ${x.d}일 (${WD[x.wd]})`);
+    };
+    $('#week .week').onclick = e => { const b = e.target.closest('.wd'); if (b) show(+b.dataset.i); };
+    $('#week .week-nav').onclick = e => { const b = e.target.closest('[data-off]'); if (b) renderWeek(current, +b.dataset.off); };
+    const ti = days.findIndex(x => sameDay(x, today));
+    show(ti >= 0 ? ti : 0);
   }
 
   function renderChart(r) {
@@ -225,7 +340,6 @@
     const opts = { ...current.input, yongBasis };
     current = S.compute(opts);
     render(current);
-    try { localStorage.setItem('lastInput', JSON.stringify(opts)); } catch (er) { }
   });
 
   function renderBalance(r) {
