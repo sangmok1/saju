@@ -174,6 +174,7 @@ USAGE = Usage(USAGE_BUCKET)
 class Handler(SimpleHTTPRequestHandler):
     server_version = "saju"
     sys_version = ""
+    extensions_map = {**SimpleHTTPRequestHandler.extensions_map, ".webmanifest": "application/manifest+json"}
 
     def log_message(self, fmt, *args):
         pass
